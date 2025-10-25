@@ -1,0 +1,182 @@
+:root {
+  color-scheme: dark light;
+  --background: #101418;
+  --surface: #1b222b;
+  --border: #2f3b47;
+  --accent: #4fc3f7;
+  --text: #e6eef7;
+  --muted: #8fa3b7;
+  --white-key: #f8f9fc;
+  --white-key-shadow: rgba(0, 0, 0, 0.3);
+  --black-key: #121417;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Inter", "Segoe UI", sans-serif;
+  background: linear-gradient(180deg, #0a0f14 0%, #0f1720 100%);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 2rem 1rem 4rem;
+}
+
+.app {
+  width: min(1100px, 100%);
+  background: rgba(16, 20, 24, 0.8);
+  border: 1px solid rgba(79, 195, 247, 0.1);
+  border-radius: 16px;
+  padding: 2rem;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+header h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: clamp(2rem, 4vw, 2.6rem);
+}
+
+header p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin: 2rem 0 2.5rem;
+  align-items: center;
+}
+
+.controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.controls input,
+.controls select {
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.controls input:focus,
+.controls select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(79, 195, 247, 0.3);
+}
+
+.status {
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.keyboard {
+  position: relative;
+  height: clamp(220px, 35vw, 320px);
+  display: flex;
+  border-radius: 0 0 14px 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: var(--surface);
+}
+
+.key-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.key {
+  position: relative;
+  cursor: pointer;
+  border: none;
+  font: inherit;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding-bottom: 0.6rem;
+  transition: transform 0.05s ease;
+  user-select: none;
+}
+
+.key.white {
+  width: 100%;
+  height: 100%;
+  background: var(--white-key);
+  color: #1b1e24;
+  border-right: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.1), inset 0 6px 0 rgba(255, 255, 255, 0.2),
+    0 12px 18px var(--white-key-shadow);
+}
+
+.key.white.active {
+  transform: translateY(4px);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.15), 0 6px 12px rgba(0, 0, 0, 0.2);
+}
+
+.key.black {
+  position: absolute;
+  top: 0;
+  left: 70%;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 68%;
+  background: linear-gradient(180deg, #2b333d 0%, #0e1014 100%);
+  color: var(--text);
+  border-radius: 0 0 6px 6px;
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.4), 0 8px 14px rgba(0, 0, 0, 0.5);
+  z-index: 2;
+}
+
+.key.black.active {
+  transform: translateX(-50%) translateY(4px);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.5), 0 4px 10px rgba(0, 0, 0, 0.6);
+}
+
+.key .label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.5;
+}
+
+.key.white .label {
+  color: #1f2933;
+}
+
+.key.black .label {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+@media (max-width: 900px) {
+  .app {
+    padding: 1.5rem;
+  }
+
+  .controls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .keyboard {
+    height: 220px;
+  }
+}

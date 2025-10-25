@@ -11,6 +11,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (BOOL)loadSampleAtURL:(NSURL *_Nonnull)url error:(NSError * _Nullable * _Nullable)error;
 - (NSUUID *_Nullable)playMIDINote:(NSInteger)midiNote;
+- (BOOL)loadSampleAtURL:(NSURL *_Nonnull)url error:(NSError *__autoreleasing _Nullable *_Nullable)error;
+- (NSUUID *_Nullable)playMIDINote:(NSInteger)midiNote;
+- (BOOL)loadSampleAtURL:(NSURL *)url error:(NSError * _Nullable *)error;
+- (NSUUID * _Nullable)playMIDINote:(NSInteger)midiNote;
 - (void)stopMIDINote:(NSInteger)midiNote;
 - (BOOL)hasLoadedSample;
 
