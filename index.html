@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wave Player Keyboard</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>Wave Player Keyboard</h1>
+      <p>Load en WAV-fil og spil den over et 88-tangenters klaviatur.</p>
+    </header>
+    <section class="controls">
+      <label class="file-input">
+        <span>Vælg WAV-fil:</span>
+        <input type="file" id="filePicker" accept="audio/wav" />
+      </label>
+      <label class="base-note">
+        <span>Grundtone:</span>
+        <select id="baseNote"></select>
+      </label>
+      <div class="status" id="status">Ingen fil indlæst.</div>
+    </section>
+    <section class="keyboard" id="keyboard" aria-label="Virtuelt klaver"></section>
+  </main>
+  <script src="script.js" type="module"></script>
+</body>
+</html>

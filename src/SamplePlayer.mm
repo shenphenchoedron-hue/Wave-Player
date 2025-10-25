@@ -1,7 +1,6 @@
 #import "SamplePlayer.h"
 
 #import <AVFoundation/AVFoundation.h>
-#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -11,7 +10,6 @@
 @property (nonatomic, strong) AVAudioPCMBuffer *buffer;
 @property (nonatomic, strong) NSUUID *identifier;
 @property (nonatomic, assign) NSInteger midiNote;
-@property (nonatomic, strong, nullable) dispatch_source_t fadeTimer;
 @end
 
 @implementation SampleVoice
@@ -26,7 +24,7 @@
 @property (nonatomic, assign) BOOL engineRunning;
 - (AVAudioPCMBuffer *)bufferByReadingFile:(AVAudioFile *)file
                              targetFormat:(AVAudioFormat *)targetFormat
-                                    error:(NSError * _Nullable * _Nullable)error;
+                                    error:(NSError * _Nullable *)error;
 @end
 
 @implementation SamplePlayer
@@ -47,7 +45,7 @@
     return self.sampleBuffer != nil;
 }
 
-- (BOOL)loadSampleAtURL:(NSURL *)url error:(NSError * _Nullable * _Nullable)error {
+- (BOOL)loadSampleAtURL:(NSURL *)url error:(NSError * _Nullable *)error {
     AVAudioFile *file = [[AVAudioFile alloc] initForReading:url error:error];
     if (!file) {
         return NO;
@@ -131,7 +129,7 @@
         }
     }
 
-    __weak SamplePlayer *weakSelf = self;
+    __weak typeof(self) weakSelf = self;
     __weak SampleVoice *weakVoice = voice;
     [player scheduleBuffer:buffer atTime:nil options:0 completionHandler:^{
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -139,7 +137,7 @@
         });
     }];
 
-    player.volume = 1.0f;
+    [player setVolume:1.0f];
     [player play];
     self.voicesById[voice.identifier] = voice;
     self.voiceIdByMidi[key] = voice.identifier;
@@ -160,21 +158,17 @@
         return;
     }
 
-    if (voice.fadeTimer) {
-        dispatch_source_cancel(voice.fadeTimer);
-        voice.fadeTimer = nil;
-    }
-
     if (immediate || self.fadeDuration <= 0.0) {
         [voice.player stop];
         [self cleanupVoice:voice];
         return;
     }
 
-    [self fadeOutVoice:voice completion:^{
+    [voice.player setVolume:0.0f fadeDuration:self.fadeDuration];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(self.fadeDuration * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [voice.player stop];
         [self cleanupVoice:voice];
-    }];
+    });
 }
 
 - (void)cleanupVoice:(SampleVoice *)voice {
@@ -192,11 +186,6 @@
         return;
     }
 
-    if (voice.fadeTimer) {
-        dispatch_source_cancel(voice.fadeTimer);
-        voice.fadeTimer = nil;
-    }
-
     [self.engine detachNode:voice.player];
     [self.engine detachNode:voice.pitchUnit];
     [self.voicesById removeObjectForKey:voiceId];
@@ -205,53 +194,6 @@
     if ([self.voiceIdByMidi[key] isEqual:voiceId]) {
         [self.voiceIdByMidi removeObjectForKey:key];
     }
-}
-
-- (void)fadeOutVoice:(SampleVoice *)voice completion:(dispatch_block_t)completion {
-    if (!voice.player) {
-        if (completion) {
-            completion();
-        }
-        return;
-    }
-
-    const NSUInteger steps = 8;
-    NSTimeInterval duration = MAX(self.fadeDuration, 0.0);
-    if (duration == 0.0 || steps == 0) {
-        voice.player.volume = 0.0f;
-        if (completion) {
-            completion();
-        }
-        return;
-    }
-
-    __block NSUInteger step = 0;
-    float initialVolume = voice.player.volume;
-    dispatch_queue_t queue = dispatch_get_main_queue();
-    dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, queue);
-    voice.fadeTimer = timer;
-    uint64_t interval = (uint64_t)((duration / (double)steps) * NSEC_PER_SEC);
-    if (interval == 0) {
-        interval = 1;
-    }
-    dispatch_source_set_timer(timer, dispatch_time(DISPATCH_TIME_NOW, 0), interval, interval / 4);
-    dispatch_source_set_event_handler(timer, ^{
-        float progress = (float)(step + 1) / (float)steps;
-        voice.player.volume = std::max(0.0f, initialVolume * (1.0f - progress));
-        step++;
-        if (step >= steps) {
-            dispatch_source_cancel(timer);
-            voice.fadeTimer = nil;
-            voice.player.volume = 0.0f;
-            if (completion) {
-                completion();
-            }
-        }
-    });
-    dispatch_source_set_cancel_handler(timer, ^{
-        voice.fadeTimer = nil;
-    });
-    dispatch_resume(timer);
 }
 
 - (AVAudioPCMBuffer *)fadedBufferFrom:(AVAudioPCMBuffer *)source fadeSeconds:(NSTimeInterval)seconds {
@@ -310,7 +252,7 @@
 
 - (AVAudioPCMBuffer *)bufferByReadingFile:(AVAudioFile *)file
                              targetFormat:(AVAudioFormat *)targetFormat
-                                    error:(NSError * _Nullable * _Nullable)error {
+                                    error:(NSError * _Nullable *)error {
     if (!file || !targetFormat) {
         return nil;
     }
@@ -373,7 +315,6 @@
     file.framePosition = 0;
     __block AVAudioFramePosition framesRead = 0;
     NSError *conversionError = nil;
-    NSError __strong **strongError = error;
     BOOL success = [converter convertToBuffer:converted
                                         error:&conversionError
                         withInputFromBlock:^AVAudioBuffer * _Nullable(AVAudioPacketCount inNumberOfPackets,
@@ -393,10 +334,10 @@
 
         NSError *readError = nil;
         if (![file readIntoBuffer:inputBuffer frameCount:framesToRead error:&readError]) {
-            if (strongError && readError) {
-                *strongError = readError;
+            if (error && readError) {
+                *error = readError;
             }
-            *outStatus = AVAudioConverterInputStatus_NoDataNow;
+            *outStatus = AVAudioConverterInputStatus_HardwareError;
             return nil;
         }
 
