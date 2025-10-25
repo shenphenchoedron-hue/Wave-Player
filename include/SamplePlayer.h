@@ -9,6 +9,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) NSInteger baseMIDINote; // default: 60 (C4)
 @property (nonatomic, assign) NSTimeInterval fadeDuration; // seconds, default 0.01
 
+- (BOOL)loadSampleAtURL:(NSURL *_Nonnull)url error:(NSError * _Nullable * _Nullable)error;
+- (NSUUID *_Nullable)playMIDINote:(NSInteger)midiNote;
 - (BOOL)loadSampleAtURL:(NSURL *_Nonnull)url error:(NSError *__autoreleasing _Nullable *_Nullable)error;
 - (NSUUID *_Nullable)playMIDINote:(NSInteger)midiNote;
 - (BOOL)loadSampleAtURL:(NSURL *)url error:(NSError * _Nullable *)error;

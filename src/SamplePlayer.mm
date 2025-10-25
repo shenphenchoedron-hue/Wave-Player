@@ -26,6 +26,7 @@
 @property (nonatomic, assign) BOOL engineRunning;
 - (AVAudioPCMBuffer *)bufferByReadingFile:(AVAudioFile *)file
                              targetFormat:(AVAudioFormat *)targetFormat
+                                    error:(NSError * _Nullable * _Nullable)error;
                                     error:(NSError *__autoreleasing _Nullable *_Nullable)error;
                                     error:(NSError * _Nullable *)error;
 @end
@@ -48,6 +49,7 @@
     return self.sampleBuffer != nil;
 }
 
+- (BOOL)loadSampleAtURL:(NSURL *_Nonnull)url error:(NSError * _Nullable * _Nullable)error {
 - (BOOL)loadSampleAtURL:(NSURL *_Nonnull)url error:(NSError *__autoreleasing _Nullable *_Nullable)error {
 - (BOOL)loadSampleAtURL:(NSURL *)url error:(NSError * _Nullable *)error {
     AVAudioFile *file = [[AVAudioFile alloc] initForReading:url error:error];
