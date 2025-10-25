@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
+project(WaveKeyboard LANGUAGES C CXX)
 project(WaveKeyboard LANGUAGES C CXX OBJC OBJCXX)
 cmake_minimum_required(VERSION 3.16)
 project(WavePlayer LANGUAGES CXX)
@@ -7,6 +8,18 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(NOT APPLE)
+    add_custom_target(WaveKeyboard ALL
+        COMMAND ${CMAKE_COMMAND} -E echo "WaveKeyboard.app can only be built on macOS with Cocoa and AVFoundation available."
+    )
+    return()
+endif()
+
+enable_language(OBJC)
+enable_language(OBJCXX)
+
+set(CMAKE_OBJCXX_FLAGS "${CMAKE_OBJCXX_FLAGS} -fobjc-arc")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "" FORCE)
 set(CMAKE_OBJCXX_FLAGS "${CMAKE_OBJCXX_FLAGS} -fobjc-arc")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15")
 

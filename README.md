@@ -47,6 +47,8 @@ open build/WaveKeyboard.app
 - `src/main.mm` – macOS GUI (Cocoa) med vindue, filvælger og klavertegning.
 - `src/SamplePlayer.mm` & `include/SamplePlayer.h` – lydmotor baseret på `AVAudioEngine` og `AVAudioUnitTimePitch` til pitch-shifting uden tempoændring.
 - `CMakeLists.txt` – bygger et `MACOSX_BUNDLE` og linker mod Cocoa/AVFoundation.
+
+> **Bemærk:** På ikke-macOS platforme konfigurerer CMake stadig projektet, men der oprettes kun et stub-target, da Cocoa- og AVFoundation-frameworks kræves for selve applikationen.
 ## Kørsel
 
 ```bash
