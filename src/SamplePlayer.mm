@@ -27,6 +27,7 @@
 - (AVAudioPCMBuffer *)bufferByReadingFile:(AVAudioFile *)file
                              targetFormat:(AVAudioFormat *)targetFormat
                                     error:(NSError *__autoreleasing _Nullable *_Nullable)error;
+                                    error:(NSError * _Nullable *)error;
 @end
 
 @implementation SamplePlayer
@@ -48,6 +49,7 @@
 }
 
 - (BOOL)loadSampleAtURL:(NSURL *_Nonnull)url error:(NSError *__autoreleasing _Nullable *_Nullable)error {
+- (BOOL)loadSampleAtURL:(NSURL *)url error:(NSError * _Nullable *)error {
     AVAudioFile *file = [[AVAudioFile alloc] initForReading:url error:error];
     if (!file) {
         return NO;
@@ -132,6 +134,7 @@
     }
 
     __weak SamplePlayer *weakSelf = self;
+    __weak typeof(self) weakSelf = self;
     __weak SampleVoice *weakVoice = voice;
     [player scheduleBuffer:buffer atTime:nil options:0 completionHandler:^{
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -140,6 +143,7 @@
     }];
 
     player.volume = 1.0f;
+    [player setVolume:1.0f];
     [player play];
     self.voicesById[voice.identifier] = voice;
     self.voiceIdByMidi[key] = voice.identifier;
@@ -175,6 +179,11 @@
         [voice.player stop];
         [self cleanupVoice:voice];
     }];
+    [voice.player setVolume:0.0f fadeDuration:self.fadeDuration];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(self.fadeDuration * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [voice.player stop];
+        [self cleanupVoice:voice];
+    });
 }
 
 - (void)cleanupVoice:(SampleVoice *)voice {
@@ -311,6 +320,7 @@
 - (AVAudioPCMBuffer *)bufferByReadingFile:(AVAudioFile *)file
                              targetFormat:(AVAudioFormat *)targetFormat
                                     error:(NSError *__autoreleasing _Nullable *_Nullable)error {
+                                    error:(NSError * _Nullable *)error {
     if (!file || !targetFormat) {
         return nil;
     }
@@ -397,6 +407,10 @@
                 readFailure = readError;
             }
             *outStatus = AVAudioConverterInputStatus_NoDataNow;
+            if (error && readError) {
+                *error = readError;
+            }
+            *outStatus = AVAudioConverterInputStatus_HardwareError;
             return nil;
         }
 
@@ -411,6 +425,11 @@
             *error = readFailure ?: (conversionError ?: [NSError errorWithDomain:NSOSStatusErrorDomain
                                                                              code:-1
                                                                          userInfo:@{ NSLocalizedDescriptionKey : @"Audio conversion failed." }]);
+    if (!success) {
+        if (error) {
+            *error = conversionError ?: [NSError errorWithDomain:NSOSStatusErrorDomain
+                                                            code:-1
+                                                        userInfo:@{ NSLocalizedDescriptionKey : @"Audio conversion failed." }];
         }
         return nil;
     }
