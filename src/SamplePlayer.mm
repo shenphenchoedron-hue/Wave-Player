@@ -1,6 +1,7 @@
 #import "SamplePlayer.h"
 
 #import <AVFoundation/AVFoundation.h>
+#include <cmath>
 #include <cstring>
 
 @interface SampleVoice : NSObject
@@ -21,6 +22,9 @@
 @property (nonatomic, strong) NSMutableDictionary<NSUUID *, SampleVoice *> *voicesById;
 @property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSUUID *> *voiceIdByMidi;
 @property (nonatomic, assign) BOOL engineRunning;
+- (AVAudioPCMBuffer *)bufferByReadingFile:(AVAudioFile *)file
+                             targetFormat:(AVAudioFormat *)targetFormat
+                                    error:(NSError * _Nullable *)error;
 @end
 
 @implementation SamplePlayer
@@ -47,18 +51,32 @@
         return NO;
     }
 
-    AVAudioFormat *processingFormat = file.processingFormat;
-    AVAudioFrameCount frameCount = (AVAudioFrameCount)file.length;
-    AVAudioPCMBuffer *buffer = [[AVAudioPCMBuffer alloc] initWithPCMFormat:processingFormat frameCapacity:frameCount];
-    if (![file readIntoBuffer:buffer error:error]) {
+    AVAudioFormat *sourceFormat = file.processingFormat;
+    AVAudioChannelCount channelCount = MAX(sourceFormat.channelCount, (AVAudioChannelCount)1);
+    AVAudioFormat *targetFormat = [[AVAudioFormat alloc] initWithCommonFormat:AVAudioPCMFormatFloat32
+                                                                  sampleRate:sourceFormat.sampleRate
+                                                                     channels:channelCount
+                                                                  interleaved:NO];
+    if (!targetFormat) {
+        if (error) {
+            *error = [NSError errorWithDomain:NSOSStatusErrorDomain
+                                         code:-1
+                                     userInfo:@{ NSLocalizedDescriptionKey : @"Failed to create audio format for sample." }];
+        }
         return NO;
     }
-    buffer.frameLength = frameCount;
+
+    AVAudioPCMBuffer *buffer = [self bufferByReadingFile:file
+                                            targetFormat:targetFormat
+                                                   error:error];
+    if (!buffer) {
+        return NO;
+    }
 
     [self stopAllVoices];
 
     self.sampleBuffer = buffer;
-    self.sampleFormat = processingFormat;
+    self.sampleFormat = buffer.format;
 
     if (!self.engineRunning) {
         NSError *engineError = nil;
@@ -87,7 +105,8 @@
     [self.engine attachNode:player];
     [self.engine attachNode:pitchUnit];
     [self.engine connect:player to:pitchUnit format:self.sampleFormat];
-    [self.engine connect:pitchUnit to:self.engine.mainMixerNode format:self.sampleFormat];
+    [self.engine connect:pitchUnit to:self.engine.mainMixerNode format:nil];
+    [self.engine prepare];
 
     AVAudioPCMBuffer *buffer = [self fadedBufferFrom:self.sampleBuffer fadeSeconds:self.fadeDuration];
     if (!buffer) {
@@ -196,12 +215,15 @@
     if (fadeSamples * 2 > frameLength) {
         fadeSamples = frameLength / 2;
     }
+    if (fadeSamples == 0 && seconds > 0.0) {
+        fadeSamples = MIN((AVAudioFrameCount)1, frameLength);
+    }
 
     for (NSUInteger channel = 0; channel < channelCount; ++channel) {
-        float *destination = buffer.floatChannelData[channel];
-        const float *sourceData = source.floatChannelData[channel];
+        float *destination = buffer.floatChannelData ? buffer.floatChannelData[channel] : nullptr;
+        const float *sourceData = source.floatChannelData ? source.floatChannelData[channel] : nullptr;
         if (!destination || !sourceData) {
-            continue;
+            return nil;
         }
 
         memcpy(destination, sourceData, sizeof(float) * frameLength);
@@ -224,6 +246,126 @@
     for (SampleVoice *voice in voices) {
         [self stopVoice:voice immediately:YES];
     }
+    [self.voicesById removeAllObjects];
+    [self.voiceIdByMidi removeAllObjects];
+}
+
+- (AVAudioPCMBuffer *)bufferByReadingFile:(AVAudioFile *)file
+                             targetFormat:(AVAudioFormat *)targetFormat
+                                    error:(NSError * _Nullable *)error {
+    if (!file || !targetFormat) {
+        return nil;
+    }
+
+    AVAudioFormat *sourceFormat = file.processingFormat;
+    AVAudioFrameCount sourceFrameCount = (AVAudioFrameCount)file.length;
+
+    if (sourceFrameCount == 0) {
+        if (error) {
+            *error = [NSError errorWithDomain:NSOSStatusErrorDomain
+                                         code:-1
+                                     userInfo:@{ NSLocalizedDescriptionKey : @"Sample file contains no audio frames." }];
+        }
+        return nil;
+    }
+
+    if ([sourceFormat isEqual:targetFormat]) {
+        file.framePosition = 0;
+        AVAudioPCMBuffer *buffer = [[AVAudioPCMBuffer alloc] initWithPCMFormat:sourceFormat
+                                                                   frameCapacity:sourceFrameCount];
+        if (![file readIntoBuffer:buffer error:error]) {
+            return nil;
+        }
+        buffer.frameLength = sourceFrameCount;
+        if (buffer.frameLength == 0) {
+            if (error) {
+                *error = [NSError errorWithDomain:NSOSStatusErrorDomain
+                                             code:-1
+                                         userInfo:@{ NSLocalizedDescriptionKey : @"Sample file contains no audio frames." }];
+            }
+            return nil;
+        }
+        return buffer;
+    }
+
+    double ratio = targetFormat.sampleRate / MAX(sourceFormat.sampleRate, 1.0);
+    AVAudioFrameCount targetCapacity = (AVAudioFrameCount)ceil(sourceFrameCount * ratio) + targetFormat.channelCount;
+    AVAudioPCMBuffer *converted = [[AVAudioPCMBuffer alloc] initWithPCMFormat:targetFormat
+                                                                frameCapacity:targetCapacity];
+
+    if (!converted) {
+        if (error) {
+            *error = [NSError errorWithDomain:NSOSStatusErrorDomain
+                                         code:-1
+                                     userInfo:@{ NSLocalizedDescriptionKey : @"Failed to allocate audio buffer for conversion." }];
+        }
+        return nil;
+    }
+
+    AVAudioConverter *converter = [[AVAudioConverter alloc] initFromFormat:sourceFormat toFormat:targetFormat];
+    if (!converter) {
+        if (error) {
+            *error = [NSError errorWithDomain:NSOSStatusErrorDomain
+                                         code:-1
+                                     userInfo:@{ NSLocalizedDescriptionKey : @"Unable to create audio converter." }];
+        }
+        return nil;
+    }
+
+    file.framePosition = 0;
+    __block AVAudioFramePosition framesRead = 0;
+    NSError *conversionError = nil;
+    BOOL success = [converter convertToBuffer:converted
+                                        error:&conversionError
+                        withInputFromBlock:^AVAudioBuffer * _Nullable(AVAudioPacketCount inNumberOfPackets,
+                                                                     AVAudioConverterInputStatus *outStatus) {
+        AVAudioFramePosition remaining = sourceFrameCount - framesRead;
+        if (remaining <= 0) {
+            *outStatus = AVAudioConverterInputStatus_EndOfStream;
+            return nil;
+        }
+
+        AVAudioFrameCount framesToRead = (AVAudioFrameCount)MIN((AVAudioFramePosition)inNumberOfPackets, remaining);
+        AVAudioPCMBuffer *inputBuffer = [[AVAudioPCMBuffer alloc] initWithPCMFormat:sourceFormat frameCapacity:framesToRead];
+        if (!inputBuffer) {
+            *outStatus = AVAudioConverterInputStatus_NoDataNow;
+            return nil;
+        }
+
+        NSError *readError = nil;
+        if (![file readIntoBuffer:inputBuffer frameCount:framesToRead error:&readError]) {
+            if (error && readError) {
+                *error = readError;
+            }
+            *outStatus = AVAudioConverterInputStatus_HardwareError;
+            return nil;
+        }
+
+        inputBuffer.frameLength = framesToRead;
+        framesRead += framesToRead;
+        *outStatus = AVAudioConverterInputStatus_HaveData;
+        return inputBuffer;
+    }];
+
+    if (!success) {
+        if (error) {
+            *error = conversionError ?: [NSError errorWithDomain:NSOSStatusErrorDomain
+                                                            code:-1
+                                                        userInfo:@{ NSLocalizedDescriptionKey : @"Audio conversion failed." }];
+        }
+        return nil;
+    }
+
+    if (converted.frameLength == 0) {
+        if (error) {
+            *error = [NSError errorWithDomain:NSOSStatusErrorDomain
+                                         code:-1
+                                     userInfo:@{ NSLocalizedDescriptionKey : @"Converted buffer has no audio data." }];
+        }
+        return nil;
+    }
+
+    return converted;
 }
 
 @end
